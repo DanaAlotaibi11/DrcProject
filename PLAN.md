@@ -2,7 +2,6 @@
 
 ## Week 1: Environment Setup
 
-- Test the ESP32 and upload sample code.
 - Install Arduino IDE and Python.
 - Prepare the repository structure and assign roles.
 - Create a dashboard using mock data.
