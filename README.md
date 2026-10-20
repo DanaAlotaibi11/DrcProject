@@ -2,38 +2,38 @@
 
 **Low-Cost Water Tank Leak Detection Using Sound and Vibration**
 
-VibraFlow هو نموذج أولي منخفض التكلفة يساعد على اكتشاف الاشتباه في تسرب خزانات المياه من خلال تحليل إشارات الصوت والاهتزاز، ثم عرض النتيجة في Dashboard بسيطة.
+VibraFlow is a low-cost prototype designed to detect potential water tank leaks by analyzing sound and vibration signals and displaying the results on a simple dashboard.
 
-## المشكلة
+## Problem
 
-قد تبدأ بعض تسربات الخزانات بشكل بسيط ويصعب ملاحظتها بصريًا، مما قد يؤدي إلى فقدان المياه أو زيادة الضرر قبل اكتشاف المشكلة. لذلك نحتاج إلى وسيلة أولية منخفضة التكلفة تراقب التغيرات غير الطبيعية وتنبّه المستخدم إلى ضرورة الفحص.
+Small water tank leaks can be difficult to detect visually. If left unnoticed, they may lead to water loss and further damage. Therefore, a low-cost early-warning system is needed to monitor unusual changes and alert the user when an inspection may be required.
 
-## الحل المقترح
+## Proposed Solution
 
-يستخدم النظام:
+The system uses:
 
-- ميكروفونين `INMP441` لالتقاط الصوت من نقطتين مختلفتين.
-- حساس اهتزاز `Piezo` لقياس اهتزاز جدار الخزان.
-- لوحة `ESP32` لجمع القراءات وإرسالها إلى الحاسب.
-- برنامج بلغة Python لتحليل الإشارات.
-- Dashboard لعرض القراءات والتنبيه.
+- Two `INMP441` microphones to capture sound from different points.
+- A `Piezo` vibration sensor to measure vibrations on the tank wall.
+- An `ESP32` board to collect the sensor readings and send them to a computer.
+- Python software to process and analyze the signals.
+- A dashboard to display readings and alerts.
 
-تُدمج قراءات الصوت والاهتزاز، ثم يعرض النظام إحدى الحالتين:
+The system combines sound and vibration readings and displays one of the following conditions:
 
-- `Normal` — لا توجد مؤشرات غير طبيعية.
-- `Potential Leak` — توجد مؤشرات تستدعي الفحص.
+- `Normal` — No unusual indicators are detected.
+- `Potential Leak` — Unusual indicators are detected and further inspection is recommended.
 
-## هدف الـMVP
+## MVP Objectives
 
-- قراءة الإشارات من الحساسات بصورة مستقرة.
-- تسجيل بيانات لخزان طبيعي وتسرب متحكم فيه.
-- مقارنة خصائص الصوت والاهتزاز بين الحالتين.
-- بناء آلية كشف أولية باستخدام Thresholds.
-- عرض النتيجة والقراءات في Dashboard.
+- Read the sensor signals reliably.
+- Record data from normal and controlled-leak conditions.
+- Compare sound and vibration features between both conditions.
+- Develop an initial detection method using thresholds.
+- Display sensor readings, system status, and alerts on a dashboard.
 
-> VibraFlow أداة إنذار أولي، ولا يحدد مكان التسرب بدقة ولا يستبدل الفحص الفني.
+> VibraFlow is an early-warning prototype. It does not identify the exact location of a leak and does not replace a professional inspection.
 
-## المكونات المطلوبة
+## Required Components
 
 - ESP32 Development Board
 - 2 × INMP441 Microphones
@@ -41,12 +41,12 @@ VibraFlow هو نموذج أولي منخفض التكلفة يساعد على �
 - Breadboard
 - Jumper Wires
 - USB Cable
-- خزان تجريبي وصمام وأنبوب
+- Test Tank, Valve, and Tube
 - Laptop
 
-**الميزانية القصوى للـMVP: 400 ريال سعودي.**
+**Maximum MVP budget: 400 SAR.**
 
-## التقنيات
+## Technologies
 
 - ESP32 / Arduino IDE
 - Python
@@ -54,16 +54,16 @@ VibraFlow هو نموذج أولي منخفض التكلفة يساعد على �
 - Serial Communication
 - Dashboard Development
 
-## هيكل المشروع
+## Project Structure
 
 ```text
 VibraFlow/
-├── esp32/             # كود ESP32 وقراءة الحساسات
-├── signal_processing/ # معالجة وتحليل الصوت والاهتزاز
-├── dashboard/         # واجهة القراءات والتنبيهات
-├── dataset/           # وصف وتنظيم بيانات التجارب
-├── tests/             # اختبارات النظام
-└── docs/              # التوصيلات والتوثيق
+├── esp32/             # ESP32 code and sensor readings
+├── signal_processing/ # Sound and vibration signal processing
+├── dashboard/         # Readings, system status, and alerts interface
+├── dataset/           # Experimental data and documentation
+├── tests/             # System and software tests
+└── docs/              # Wiring diagrams and project documentationالتوصيلات والتوثيق
 ```
 
 ## حالة المشروع
