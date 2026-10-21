@@ -1,4 +1,4 @@
-# VibraFlow
+# VibraTank
 
 **Low-Cost Water Tank Leak Detection Using Sound and Vibration**
 
