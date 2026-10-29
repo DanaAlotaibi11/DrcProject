@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from supabase import create_client
 
 # ---------------------------------
 # Page configuration
@@ -41,7 +42,6 @@ p, label {
     opacity: 1 !important;
 }
 
-/* Dropdown */
 div[data-baseweb="select"] > div {
     background-color: #1E3350 !important;
     border: 1px solid #47749A !important;
@@ -61,7 +61,6 @@ div[role="option"] {
     color: white !important;
 }
 
-/* Sensor cards */
 .sensor-card {
     background: #182A43;
     border: 1px solid #304966;
@@ -82,7 +81,6 @@ div[role="option"] {
     margin-top: 8px;
 }
 
-/* Status cards */
 .status-card {
     padding: 18px;
     border-radius: 12px;
@@ -119,6 +117,50 @@ div[role="option"] {
 """, unsafe_allow_html=True)
 
 # ---------------------------------
+# Supabase connection
+# ---------------------------------
+SENSOR_COLUMNS = {
+    "mic1": "Microphone 1",
+    "mic2": "Microphone 2",
+    "mic3": "Microphone 3",
+    "mic4": "Microphone 4",
+    "vibration": "Vibration Sensor"
+}
+
+sensor_colors = {
+    "Microphone 1": "#38BDF8",
+    "Microphone 2": "#A78BFA",
+    "Microphone 3": "#F472B6",
+    "Microphone 4": "#FBBF24",
+    "Vibration Sensor": "#34D399"
+}
+
+
+@st.cache_resource
+def get_supabase_client():
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+
+def load_sensor_data():
+    client = get_supabase_client()
+
+    response = (
+        client.table("sensor_readings")
+        .select(
+            "id,created_at,device_id,"
+            "mic1,mic2,mic3,mic4,vibration,status"
+        )
+        .order("created_at", desc=True)
+        .limit(100)
+        .execute()
+    )
+
+    return pd.DataFrame(response.data or [])
+
+
+# ---------------------------------
 # Header
 # ---------------------------------
 st.title("VibraTank Dashboard")
@@ -128,18 +170,55 @@ st.write("Monitoring sound and vibration signals")
 st.divider()
 
 # ---------------------------------
+# Load readings
+# ---------------------------------
+try:
+    readings = load_sensor_data()
+    connection_error = None
+
+except Exception as error:
+    readings = pd.DataFrame()
+    connection_error = error
+
+if connection_error is not None:
+    st.error(
+        "Unable to load sensor readings from Supabase. "
+        "Check the connection settings and read permissions."
+    )
+    st.caption(
+        "The dashboard is not showing live readings."
+    )
+    st.stop()
+
+if readings.empty:
+    st.info("No sensor readings are available yet.")
+    st.stop()
+
+readings["created_at"] = pd.to_datetime(
+    readings["created_at"],
+    errors="coerce",
+    utc=True
+)
+
+readings = readings.sort_values(
+    ["created_at", "id"],
+    ascending=[True, True]
+)
+
+for column in SENSOR_COLUMNS:
+    readings[column] = pd.to_numeric(
+        readings[column],
+        errors="coerce"
+    )
+
+latest = readings.iloc[-1]
+
+# ---------------------------------
 # System status
 # ---------------------------------
 st.header("System Status")
 
-status = st.selectbox(
-    "Select system status (Demo)",
-    [
-        "Waiting for Sensor Data",
-        "Normal",
-        "Potential Leak"
-    ]
-)
+status = latest.get("status", "Waiting")
 
 if status == "Normal":
     st.markdown(
@@ -165,30 +244,34 @@ else:
         unsafe_allow_html=True
     )
 
+device_id = latest.get("device_id", "Unknown")
+reading_time = latest.get("created_at")
+
+st.caption(f"Device: {device_id}")
+
+if pd.notna(reading_time):
+    st.caption(
+        "Latest reading: "
+        + reading_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    )
+
 # ---------------------------------
 # Sensor readings
 # ---------------------------------
 st.header("Sensor Readings")
 
-sensor_values = {
-    "Microphone 1": 0.42,
-    "Microphone 2": 0.38,
-    "Microphone 3": 0.45,
-    "Microphone 4": 0.40,
-    "Vibration Sensor": 0.15
-}
-
-sensor_colors = {
-    "Microphone 1": "#38BDF8",
-    "Microphone 2": "#A78BFA",
-    "Microphone 3": "#F472B6",
-    "Microphone 4": "#FBBF24",
-    "Vibration Sensor": "#34D399"
-}
-
 cols = st.columns(4)
 
-for index, (sensor, value) in enumerate(sensor_values.items()):
+for index, (column, sensor) in enumerate(
+    SENSOR_COLUMNS.items()
+):
+    value = latest[column]
+
+    if pd.isna(value):
+        display_value = "N/A"
+    else:
+        display_value = f"{value:.2f}"
+
     with cols[index % 4]:
         color = sensor_colors[sensor]
 
@@ -198,14 +281,17 @@ for index, (sensor, value) in enumerate(sensor_values.items()):
                 <div class="sensor-label">{sensor}</div>
                 <div class="sensor-value"
                      style="color:{color};">
-                    {value:.2f}
+                    {display_value}
                 </div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-st.caption("Demo values only - No sensors connected")
+if all(pd.isna(latest[column]) for column in SENSOR_COLUMNS):
+    st.caption(
+        "No numeric sensor values received yet."
+    )
 
 st.divider()
 
@@ -214,31 +300,25 @@ st.divider()
 # ---------------------------------
 st.header("Signal Charts")
 
-data = pd.DataFrame({
-    "Microphone 1": [
-        0.20, 0.40, 0.30, 0.60, 0.38, 0.55, 0.70
-    ],
-    "Microphone 2": [
-        0.18, 0.38, 0.28, 0.55, 0.35, 0.50, 0.65
-    ],
-    "Microphone 3": [
-        0.25, 0.35, 0.42, 0.48, 0.40, 0.52, 0.60
-    ],
-    "Microphone 4": [
-        0.15, 0.30, 0.28, 0.40, 0.32, 0.45, 0.55
-    ],
-    "Vibration Sensor": [
-        0.10, 0.15, 0.12, 0.20, 0.16, 0.22, 0.25
-    ]
-})
-
 fig = go.Figure()
 
-for sensor in data.columns:
+has_chart_data = False
+
+for column, sensor in SENSOR_COLUMNS.items():
+    valid = readings[
+        readings["created_at"].notna()
+        & readings[column].notna()
+    ]
+
+    if valid.empty:
+        continue
+
+    has_chart_data = True
+
     fig.add_trace(
         go.Scatter(
-            x=list(range(len(data))),
-            y=data[sensor],
+            x=valid["created_at"],
+            y=valid[column],
             mode="lines+markers",
             name=sensor,
             line=dict(
@@ -254,9 +334,9 @@ fig.update_layout(
     plot_bgcolor="#182A43",
     font=dict(color="#E2E8F0"),
     height=450,
-    margin=dict(l=30, r=30, t=35, b=35),
+    margin=dict(l=30, r=30, t=35, b=90),
     xaxis=dict(
-        title="Time Samples",
+        title="Reading Time (UTC)",
         gridcolor="#304966",
         zeroline=False
     ),
@@ -266,24 +346,25 @@ fig.update_layout(
         zeroline=False
     ),
     legend=dict(
-    orientation="h",
-    y=-0.25,
-    x=0,
-    font=dict(
-        color="#FFFFFF",
-        size=15
+        orientation="h",
+        y=-0.3,
+        x=0,
+        font=dict(color="#FFFFFF", size=13),
+        bgcolor="rgba(0,0,0,0)"
     ),
-    bgcolor="rgba(0,0,0,0)"
-),
     hovermode="x unified"
 )
 
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
-
-st.caption("Simulated signal data for demonstration only")
+if has_chart_data:
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+else:
+    st.info(
+        "Waiting for numeric sensor readings "
+        "to display the charts."
+    )
 
 st.divider()
 
@@ -295,7 +376,8 @@ st.header("Leak Alerts")
 if status == "Potential Leak":
     st.markdown(
         '<div class="status-card warning">'
-        'Potential leak detected. Please inspect the water tank.'
+        'Potential leak detected. '
+        'Please inspect the water tank.'
         '</div>',
         unsafe_allow_html=True
     )
@@ -303,7 +385,8 @@ if status == "Potential Leak":
 elif status == "Normal":
     st.markdown(
         '<div class="status-card normal">'
-        'No active leak alerts. System operating normally.'
+        'No active leak alerts. '
+        'System operating normally.'
         '</div>',
         unsafe_allow_html=True
     )
@@ -315,3 +398,8 @@ else:
         '</div>',
         unsafe_allow_html=True
     )
+
+st.caption(
+    "Data source: Supabase / sensor_readings. "
+    "Use Refresh in your browser to fetch new readings."
+)
