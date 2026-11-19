@@ -1,51 +1,83 @@
-import serial
+"""Calculate live features from ESP32 Serial data.
+
+Expected line format: mic1,mic2,vibration
+Use data_logger.py when collecting labelled experiments.
+"""
+
+from __future__ import annotations
+
+import argparse
+
 import numpy as np
-import features
+import serial
 
-PORT= "COM3"
-BAUD_RATE=115200
-WINDOW_SIZE=1000
-SAMPLE_RATE=1000 #Hz
+try:
+    from .features import extract_features
+except ImportError:
+    from features import extract_features
 
-def main():
-    print("Connecting to COM3")
-    arduino=serial.Serial(PORT,BAUD_RATE,timeout=1)
 
-    mic1_buf, mic2_buf, vib_buf= [],[],[] #empty lists for the mic1, mic2, and piezo
-    print("Listening...")
+def run(port: str, baud: int, window_size: int, sample_rate: float) -> None:
+    buffers = {"mic1": [], "mic2": [], "vibration": []}
+
+    print(f"Connecting to {port} at {baud} baud...")
+    with serial.Serial(port, baud, timeout=1) as device:
+        print("Listening for mic1,mic2,vibration...")
+
+        try:
+            while True:
+                raw = device.readline().decode("utf-8", errors="ignore").strip()
+                if not raw:
+                    continue
+
+                try:
+                    mic1, mic2, vibration = (
+                        float(value.strip()) for value in raw.split(",")
+                    )
+                except (ValueError, TypeError):
+                    continue
+
+                buffers["mic1"].append(mic1)
+                buffers["mic2"].append(mic2)
+                buffers["vibration"].append(vibration)
+
+                if len(buffers["mic1"]) < window_size:
+                    continue
+
+                results = extract_features(
+                    mic1=np.asarray(buffers["mic1"]),
+                    mic2=np.asarray(buffers["mic2"]),
+                    vibration=np.asarray(buffers["vibration"]),
+                    fs=sample_rate,
+                    include_spectrum=False,
+                )
+
+                print(
+                    f"Mic1 RMS: {results['mic1']['rms']:.2f} | "
+                    f"Mic2 RMS: {results['mic2']['rms']:.2f} | "
+                    f"Vibration Peak: {results['vibration']['max_peak']:.2f}"
+                )
+
+                for buffer in buffers.values():
+                    buffer.clear()
+
+        except KeyboardInterrupt:
+            print("\nStopped.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="VibraFlow live feature reader")
+    parser.add_argument("--port", required=True, help="Example: COM3")
+    parser.add_argument("--baud", type=int, default=115200)
+    parser.add_argument("--window-size", type=int, default=1000)
+    parser.add_argument("--sample-rate", type=float, required=True)
+    args = parser.parse_args()
+
     try:
-        while true:
-            raw=arduino.readline().decode('utf-8').strip() #reads serial output of our esp code
-            if not raw:
-                continue
-            try: #format: mic1,mic2,piezo || this reads esp readings and puts it into the lists we made
-                m1,m2,vib=raw.split(',')
-                mic1_buf.append(float(m1))
-                mic2_buf.append(float(m2))
-                vib_buf.append(float(vib))
-            except ValueError: #ignores corrupted lines(check)
-                continue
-            if len(mic1_buf)>=WINDOW_SIZE:# does it fit our array size? yes then put it into np arrays
-                m1_array=np.array(mic1_buf)
-                m2_array=np.array(mic2_buf)
-                vib_array=np.array(vib_buf)
+        run(args.port, args.baud, args.window_size, args.sample_rate)
+    except serial.SerialException as error:
+        raise SystemExit(f"Serial connection failed: {error}") from error
 
-                #now pass it to the engine via extract function
-                results=features.extract_features(mic1=m1_array,
-                                                  mic2=m2_array,
-                                                  vibration=vib_array,
-                                                  fs=SAMPLE_RATE,
-                                                  include_spectrum=False)
-                print(f"Mic1 RMS: {results['mic1']['rms']:.2f} | Vibration Peak: {results['vibration']['max_peak']:.2f}")
-                mic1_buf.clear()
-                mic2_buf.clear()
-                vib_buf.clear() #clears buffers before reading again
-    except KeyboardInterrupt:
-        print("\nStopping data collection")
-    finally:
-        arduino.close()
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()
-
-
-
