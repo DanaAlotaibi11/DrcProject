@@ -16,6 +16,8 @@ reading = {
     "device_id": "VibraFlow-01",
     "mic1": None,
     "mic2": None,
+    "mic3": None,
+    "mic4": None,
     "vibration": None,
     "status": "Waiting"
 }
