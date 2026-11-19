@@ -27,8 +27,6 @@ if response.data:
     print("Device:", latest["device_id"])
     print("Microphone 1:", latest["mic1"])
     print("Microphone 2:", latest["mic2"])
-    print("Microphone 3:", latest["mic3"])
-    print("Microphone 4:", latest["mic4"])
     print("Vibration:", latest["vibration"])
     print("Status:", latest["status"])
     print("Time:", latest["created_at"])
