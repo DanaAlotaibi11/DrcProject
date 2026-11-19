@@ -1,5 +1,7 @@
 streamlit
 pandas
 plotly
+numpy
+pyserial
 supabase==2.33.0
 python-dotenv==1.2.4
