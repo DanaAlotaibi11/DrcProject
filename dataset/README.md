@@ -8,37 +8,27 @@ been reviewed.
 
 The ESP32 must print numeric CSV lines with no extra text.
 
-Current temporary setup:
-
-```text
-mic1,vibration
-1250,1840
-```
-
-Final MVP setup:
-
-```text
+Required MVP setup:\n\n```text
 mic1,mic2,vibration
 1250,1260,1840
 ```
 
-The laptop adds the elapsed timestamp, label and trial ID automatically.
+Each ESP32 line must contain the three readings in this exact order.\n\nThe laptop adds the elapsed timestamp, label and trial ID automatically.
 
 ## Collect a trial
 
 From the repository root:
 
 ```bash
-python signal_processing/data_logger.py --port COM3 --mode one-mic --label normal --trial N01 --duration 60
+python signal_processing/data_logger.py --port COM3 --mode two-mic --label normal --trial N01 --duration 60
 ```
 
 Leak example:
 
 ```bash
-python signal_processing/data_logger.py --port COM3 --mode one-mic --label leak --trial L01 --duration 60
+python signal_processing/data_logger.py --port COM3 --mode two-mic --label leak --trial L01 --duration 60
 ```
 
-When the second microphone is connected, replace `one-mic` with `two-mic`.
 
 ## First pilot experiments
 
@@ -65,7 +55,7 @@ Use a new trial ID every time; the recorder refuses to overwrite an experiment.
 |---|---|
 | `timestamp_ms` | Time elapsed since the start of the trial |
 | `mic1` | First microphone raw reading |
-| `mic2` | Second microphone raw reading; empty in one-mic mode |
+| `mic2` | Second microphone raw reading |
 | `vibration` | Piezo raw reading |
 | `label` | `normal`, `leak` or `noise` |
 | `trial_id` | Unique experiment identifier |
