@@ -16,8 +16,6 @@ supabase = create_client(URL, KEY)
 def upload_reading(
     mic1=None,
     mic2=None,
-    mic3=None,
-    mic4=None,
     vibration=None,
     status="Waiting",
     device_id="VibraFlow-01"
@@ -31,8 +29,6 @@ def upload_reading(
         "device_id": device_id,
         "mic1": mic1,
         "mic2": mic2,
-        "mic3": mic3,
-        "mic4": mic4,
         "vibration": vibration,
         "status": status
     }
