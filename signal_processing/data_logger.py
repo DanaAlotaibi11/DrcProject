@@ -169,8 +169,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mode",
         choices=("one-mic", "two-mic"),
-        default="one-mic",
-        help="Use one-mic for the current temporary setup.",
+        default="two-mic",
+        help="The VibraFlow MVP uses two microphones and one Piezo sensor.",
     )
     parser.add_argument("--label", choices=VALID_LABELS, required=True)
     parser.add_argument("--trial", required=True, help="Example: N01 or L01")
