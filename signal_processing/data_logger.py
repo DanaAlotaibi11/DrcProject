@@ -1,12 +1,17 @@
-"""Record raw ESP32 sensor readings as a labelled CSV experiment.
+"""Record one labelled VibraFlow experiment from four microphones and Piezo.
 
-Supported Serial formats:
-    one-mic mode:  mic1,vibration
-    two-mic mode: mic1,mic2,vibration
+Expected ESP32 Serial line:
+    mic1,mic2,mic3,mic4,vibration
 
 Example:
-    python signal_processing/data_logger.py --port COM3 --mode one-mic \
+    python signal_processing/data_logger.py --port COM3 \
         --label normal --trial N01 --duration 60
+
+Important:
+    EXPECTED_SAMPLE_RATE_HZ describes the intended INMP441 acquisition rate.
+    The ESP32 I2S configuration must also use 16000 Hz. This logger reports the
+    observed Serial row rate so the team can verify that acquisition and
+    transfer are keeping up.
 """
 
 from __future__ import annotations
@@ -26,34 +31,35 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RAW_DATA_DIR = PROJECT_ROOT / "dataset" / "raw"
 VALID_LABELS = ("normal", "leak", "noise")
 TRIAL_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+EXPECTED_SAMPLE_RATE_HZ = 16000
+MICROPHONE_COUNT = 4
 
 
-def parse_sensor_line(line: str, mode: str) -> tuple[float, float | None, float]:
-    """Parse one ESP32 CSV line and return mic1, mic2, vibration."""
-    expected = 2 if mode == "one-mic" else 3
+def parse_sensor_line(line: str) -> tuple[float, float, float, float, float]:
+    """Parse mic1,mic2,mic3,mic4,vibration from one ESP32 CSV line."""
     parts = [part.strip() for part in line.split(",")]
+    expected_values = MICROPHONE_COUNT + 1
 
-    if len(parts) != expected:
-        raise ValueError(f"expected {expected} values, received {len(parts)}")
+    if len(parts) != expected_values:
+        raise ValueError(
+            f"expected {expected_values} values, received {len(parts)}"
+        )
 
-    values = [float(part) for part in parts]
-
-    if mode == "one-mic":
-        return values[0], None, values[1]
-
-    return values[0], values[1], values[2]
+    mic1, mic2, mic3, mic4, vibration = (
+        float(part) for part in parts
+    )
+    return mic1, mic2, mic3, mic4, vibration
 
 
 def record_trial(
     port: str,
     baud: int,
-    mode: str,
     label: str,
     trial_id: str,
     duration: float,
     output_dir: Path = RAW_DATA_DIR,
 ) -> tuple[Path, Path]:
-    """Read a timed experiment from Serial and save CSV plus JSON metadata."""
+    """Record one timed experiment and save CSV plus JSON metadata."""
     if duration <= 0:
         raise ValueError("duration must be greater than zero")
     if label not in VALID_LABELS:
@@ -76,7 +82,6 @@ def record_trial(
     started_utc = datetime.now(timezone.utc)
     valid_rows = 0
     rejected_rows = 0
-    start_monotonic = time.monotonic()
 
     print(f"Connecting to {port} at {baud} baud...")
     with serial.Serial(port, baud, timeout=1) as device, csv_path.open(
@@ -88,9 +93,12 @@ def record_trial(
         writer = csv.DictWriter(
             csv_file,
             fieldnames=[
+                "sample_index",
                 "timestamp_ms",
                 "mic1",
                 "mic2",
+                "mic3",
+                "mic4",
                 "vibration",
                 "label",
                 "trial_id",
@@ -107,17 +115,20 @@ def record_trial(
                 continue
 
             try:
-                mic1, mic2, vibration = parse_sensor_line(raw, mode)
+                mic1, mic2, mic3, mic4, vibration = parse_sensor_line(raw)
             except (ValueError, TypeError):
                 rejected_rows += 1
                 continue
 
-            elapsed_ms = round((time.monotonic() - start_monotonic) * 1000, 3)
+            elapsed_ms = (time.monotonic() - start_monotonic) * 1000.0
             writer.writerow(
                 {
-                    "timestamp_ms": elapsed_ms,
+                    "sample_index": valid_rows,
+                    "timestamp_ms": round(elapsed_ms, 4),
                     "mic1": mic1,
-                    "mic2": "" if mic2 is None else mic2,
+                    "mic2": mic2,
+                    "mic3": mic3,
+                    "mic4": mic4,
                     "vibration": vibration,
                     "label": label,
                     "trial_id": trial_id,
@@ -131,7 +142,8 @@ def record_trial(
     metadata = {
         "trial_id": trial_id,
         "label": label,
-        "mode": mode,
+        "microphone_count": MICROPHONE_COUNT,
+        "expected_sample_rate_hz": EXPECTED_SAMPLE_RATE_HZ,
         "port": port,
         "baud": baud,
         "requested_duration_seconds": duration,
@@ -139,7 +151,10 @@ def record_trial(
         "started_at_utc": started_utc.isoformat(),
         "valid_rows": valid_rows,
         "rejected_rows": rejected_rows,
-        "observed_rate_hz": round(observed_rate_hz, 3),
+        "observed_serial_row_rate_hz": round(observed_rate_hz, 3),
+        "expected_samples_per_microphone": round(
+            EXPECTED_SAMPLE_RATE_HZ * duration
+        ),
         "notes": "",
     }
     metadata_path.write_text(
@@ -151,13 +166,22 @@ def record_trial(
         csv_path.unlink(missing_ok=True)
         metadata_path.unlink(missing_ok=True)
         raise RuntimeError(
-            "No valid readings were received. Check the COM port, wiring, "
-            "Serial baud rate and selected mode."
+            "No valid five-channel readings were received. Check the COM "
+            "port, wiring, baud rate and ESP32 output format."
         )
 
     print(f"Saved {valid_rows} readings to: {csv_path}")
     print(f"Rejected lines: {rejected_rows}")
-    print(f"Observed sampling rate: {observed_rate_hz:.2f} Hz")
+    print(f"Observed Serial row rate: {observed_rate_hz:.2f} Hz")
+    print(f"Expected INMP441 sample rate: {EXPECTED_SAMPLE_RATE_HZ} Hz")
+
+    if observed_rate_hz < EXPECTED_SAMPLE_RATE_HZ * 0.95:
+        print(
+            "WARNING: the Serial row rate is below 16 kHz. Text CSV over "
+            "Serial may not be fast enough for four raw INMP441 channels. "
+            "Do not treat this file as full-rate audio until verified."
+        )
+
     print(f"Metadata saved to: {metadata_path}")
     return csv_path, metadata_path
 
@@ -166,12 +190,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="VibraFlow experiment recorder")
     parser.add_argument("--port", required=True, help="ESP32 port, for example COM3")
     parser.add_argument("--baud", type=int, default=115200)
-    parser.add_argument(
-        "--mode",
-        choices=("one-mic", "two-mic"),
-        default="two-mic",
-        help="The VibraFlow MVP uses two microphones and one Piezo sensor.",
-    )
     parser.add_argument("--label", choices=VALID_LABELS, required=True)
     parser.add_argument("--trial", required=True, help="Example: N01 or L01")
     parser.add_argument("--duration", type=float, default=60.0)
@@ -185,7 +203,6 @@ def main() -> None:
         record_trial(
             port=args.port,
             baud=args.baud,
-            mode=args.mode,
             label=args.label,
             trial_id=args.trial,
             duration=args.duration,
@@ -193,7 +210,12 @@ def main() -> None:
         )
     except KeyboardInterrupt:
         print("\nRecording cancelled.")
-    except (serial.SerialException, OSError, ValueError, RuntimeError) as error:
+    except (
+        serial.SerialException,
+        OSError,
+        ValueError,
+        RuntimeError,
+    ) as error:
         raise SystemExit(f"Data collection failed: {error}") from error
 
 
