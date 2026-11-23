@@ -349,27 +349,63 @@ The Dashboard can display:
 
 ## Pilot Before Full Dataset Collection
 
-Collect six alternating pilot recordings:
+The six pilot recordings are a small equipment-validation session, not the
+final training dataset. Record three normal conditions and three controlled
+leaks. Every trial is a separate 60-second recording.
 
-| Trial | Condition |
-|---|---|
-| `P-N01` | Normal |
-| `P-H01` | Strong leak |
-| `P-N02` | Normal |
-| `P-H02` | Strong leak repeated |
-| `P-N03` | Normal |
-| `P-M01` | Moderate leak |
+| Order | Trial ID | Logger Label | Physical Condition |
+|---:|---|---|---|
+| 1 | `P-N01` | `normal` | Valve fully closed; no leak |
+| 2 | `P-H01` | `leak` | Strong controlled leak |
+| 3 | `P-N02` | `normal` | Valve closed again |
+| 4 | `P-H02` | `leak` | Repeat the exact strong-leak setting |
+| 5 | `P-N03` | `normal` | Valve closed again |
+| 6 | `P-M01` | `leak` | Moderate controlled leak |
 
-Use the pilot to:
+The alternating order checks whether the system returns to the normal signal
+after the valve is closed. Repeating the strong leak checks whether the setup
+produces similar results under the same condition.
 
-1. Validate the acquisition system.
-2. Plot normal and leak spectra.
-3. Compare leak-to-normal spectral ratios.
-4. Identify useful frequency bands.
-5. Confirm that repeated conditions produce similar signals.
+### Example Commands
 
-If a strong leak cannot be separated from the normal condition, stop and fix
-the sensor placement or acquisition chain before collecting the full dataset.
+```bash
+python signal_processing/data_logger.py --port COM3 --label normal --trial P-N01 --duration 60
+python signal_processing/data_logger.py --port COM3 --label leak --trial P-H01 --duration 60
+python signal_processing/data_logger.py --port COM3 --label normal --trial P-N02 --duration 60
+python signal_processing/data_logger.py --port COM3 --label leak --trial P-H02 --duration 60
+python signal_processing/data_logger.py --port COM3 --label normal --trial P-N03 --duration 60
+python signal_processing/data_logger.py --port COM3 --label leak --trial P-M01 --duration 60
+```
+
+Replace `COM3` with the actual ESP32 port.
+
+### Procedure Between Trials
+
+1. Wait until the terminal reports that the current trial was saved.
+2. Close or adjust the valve for the next condition.
+3. Refill the tank to the marked starting water level.
+4. Wait for the water and sensor signals to stabilize.
+5. Do not move the microphones or Piezo.
+6. Start the next command.
+
+Use a clearly marked valve position for the strong and moderate leak settings.
+The two strong-leak trials must use the same valve position.
+
+### Pilot Acceptance Checks
+
+After the six recordings:
+
+1. Confirm that all four microphone and Piezo channels contain valid data.
+2. Compare the two strong-leak recordings to check repeatability.
+3. Plot normal and leak time signals and spectra.
+4. Calculate leak-to-normal spectral ratios.
+5. Identify frequency bands that consistently increase during leakage.
+6. Verify that strong leakage separates clearly from the normal condition.
+
+If the strong leak cannot be distinguished from normal, stop. Fix the sensor
+placement, synchronization, sampling or acquisition method before collecting
+the full dataset. Six pilot recordings are enough to validate the measurement
+pipeline, but they are not enough to claim final ML accuracy.
 
 ---
 
