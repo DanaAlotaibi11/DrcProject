@@ -1,139 +1,111 @@
 # VibraFlow Data Collection Guide
 
-This guide explains how to download the latest project changes, connect the
-ESP32, and record labelled sensor data from two microphones and one Piezo
-vibration sensor.
+## System
 
-## 1. Download the latest changes
+```text
+4 × INMP441 microphones
+1 × Piezo vibration sensor
+ESP32
+Target sample rate: 16000 Hz
+One experiment: 60 seconds
+```
 
-Open a terminal inside the `DrcProject` folder and run:
+## 1. Get the latest files
+
+Inside the local `DrcProject` folder:
 
 ```bash
 git pull origin main
-```
-
-Install the required Python libraries:
-
-```bash
 python -m pip install -r requirements.txt
 ```
 
-## 2. Connect the hardware
+## 2. Configure ESP32
 
-Connect the following components to the ESP32:
-
-- Microphone 1
-- Microphone 2
-- Piezo vibration sensor
-- USB data cable between the ESP32 and the laptop
-
-The ESP32 code must send one line containing three numeric readings in this
-exact order:
+The repository contains:
 
 ```text
-mic1,mic2,vibration
+esp32/config.h
+```
+
+It defines:
+
+```cpp
+#define SAMPLE_RATE 16000
+#define MICROPHONE_COUNT 4
+#define RECORD_DURATION_SECONDS 60
+```
+
+The main Arduino I2S configuration must use:
+
+```cpp
+.sample_rate = SAMPLE_RATE
+```
+
+## 3. Verify the ESP32 output
+
+For the current text logger, each Serial line must contain exactly:
+
+```text
+mic1,mic2,mic3,mic4,vibration
 ```
 
 Example:
 
 ```text
-1250,1260,1840
-1270,1255,1835
-1245,1268,1842
+1250,1260,1242,1271,1840
 ```
 
-Do not print labels or explanatory text from the ESP32 during data collection.
+Close Arduino Serial Monitor before running Python.
 
-## 3. Check the COM port
-
-In Arduino IDE, open:
-
-```text
-Tools > Port
-```
-
-Note the ESP32 port, such as `COM3` or `COM4`.
-
-You may briefly open Serial Monitor to verify that the three readings appear.
-Close Serial Monitor before starting Python because only one program can use
-the ESP32 port at a time.
-
-## 4. Record a normal experiment
-
-From the project root, run:
+## 4. Record one normal experiment
 
 ```bash
 python signal_processing/data_logger.py --port COM3 --label normal --trial N01 --duration 60
 ```
 
-Replace `COM3` if the ESP32 uses a different port.
-
-This command records a normal tank condition for 60 seconds and identifies the
-experiment as `N01`.
-
-## 5. Record a controlled-leak experiment
+## 5. Record one leak experiment
 
 ```bash
 python signal_processing/data_logger.py --port COM3 --label leak --trial L01 --duration 60
 ```
 
-This records a controlled-leak condition for 60 seconds and identifies the
-experiment as `L01`.
+The logger records continuously for 60 seconds and then stops. Change the tank
+condition only after the terminal reports that the experiment was saved.
 
-## What the Data Logger does
+## 6. Output
 
-The Data Logger:
-
-1. Opens the ESP32 Serial connection.
-2. Receives Microphone 1, Microphone 2 and Piezo readings.
-3. Adds an elapsed timestamp to every reading.
-4. Adds the experiment label and trial ID.
-5. Rejects incomplete or invalid Serial lines.
-6. Prevents accidental overwriting of an existing trial.
-7. Calculates the observed sampling rate.
-8. Saves the raw time-series data and experiment information.
-
-The Data Logger only collects and organizes data. It does not detect leaks or
-train the machine-learning model.
-
-## Output files
-
-A normal experiment is saved as:
+Normal example:
 
 ```text
 dataset/raw/normal/N01.csv
 dataset/raw/normal/N01.json
 ```
 
-A leak experiment is saved as:
-
-```text
-dataset/raw/leak/L01.csv
-dataset/raw/leak/L01.json
-```
-
 The CSV contains:
 
 ```text
-timestamp_ms,mic1,mic2,vibration,label,trial_id
+sample_index,timestamp_ms,mic1,mic2,mic3,mic4,vibration,label,trial_id
 ```
 
-The JSON file contains:
+The JSON metadata contains the expected sample rate, observed Serial row rate,
+duration and data-quality counts.
 
-- Recording duration
-- COM port
-- Baud rate
-- Number of valid readings
-- Number of rejected readings
-- Observed sampling rate
+## 7. Verify before continuing
 
-## First pilot dataset
+After `N01`, check:
 
-Collect the following experiments using the same sensor locations, water level,
-recording duration and leak position:
+- All four microphone columns contain changing values.
+- The Piezo value changes when the tank surface vibrates.
+- Rejected lines are low.
+- The duration is approximately 60 seconds.
+- The actual acquisition/transfer rate is suitable.
 
-- `N01` to `N05`: normal condition
-- `L01` to `L05`: controlled-leak condition
+Do not collect the full dataset before verifying the first recording.
 
-Do not touch or move the tank and sensors while an experiment is being
-recorded. Review `N01` before collecting the remaining experiments.
+## Important
+
+Milliseconds represent the elapsed time inside a 60-second experiment.
+The intended microphone sampling rate is 16000 samples per second. Text CSV
+over Serial may not transfer four raw channels at that rate; if the observed
+rate is much lower, switch to binary transfer, local audio storage, or
+on-device feature extraction before official ML data collection.
