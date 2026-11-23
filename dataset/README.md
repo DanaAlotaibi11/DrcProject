@@ -1,64 +1,76 @@
 # VibraFlow Dataset
 
-This directory stores labelled, raw sensor experiments collected from the
-ESP32. Do not use final leak-detection thresholds until real experiments have
-been reviewed.
+This directory stores labelled experiments collected using four INMP441
+microphones and one Piezo vibration sensor.
 
-## Serial formats
+## Required acquisition settings
 
-The ESP32 must print numeric CSV lines with no extra text.
-
-Required MVP setup:\n\n```text
-mic1,mic2,vibration
-1250,1260,1840
+```text
+Microphones: 4 × INMP441
+Target sample rate: 16000 Hz
+Experiment duration: 60 seconds
 ```
 
-Each ESP32 line must contain the three readings in this exact order.\n\nThe laptop adds the elapsed timestamp, label and trial ID automatically.
+The ESP32 Serial text format expected by the Python logger is:
 
-## Collect a trial
+```text
+mic1,mic2,mic3,mic4,vibration
+```
 
-From the repository root:
+The logger adds the sample index, elapsed time, label and trial ID.
+
+## Record a trial
+
+Normal condition:
 
 ```bash
-python signal_processing/data_logger.py --port COM3 --mode two-mic --label normal --trial N01 --duration 60
+python signal_processing/data_logger.py --port COM3 --label normal --trial N01 --duration 60
 ```
 
-Leak example:
+Controlled-leak condition:
 
 ```bash
-python signal_processing/data_logger.py --port COM3 --mode two-mic --label leak --trial L01 --duration 60
+python signal_processing/data_logger.py --port COM3 --label leak --trial L01 --duration 60
 ```
 
+Replace `COM3` with the actual ESP32 port.
 
-## First pilot experiments
+## Output files
 
-Collect at least:
+Each experiment creates:
 
-- `N01` to `N05`: normal tank.
-- `L01` to `L05`: controlled leak.
-- Optional `B01` onward using label `noise`: unrelated knocks or room noise.
+```text
+dataset/raw/<label>/<trial_id>.csv
+dataset/raw/<label>/<trial_id>.json
+```
 
-Each trial creates:
+CSV columns:
 
-- `dataset/raw/<label>/<trial_id>.csv`: full time-series samples.
-- `dataset/raw/<label>/<trial_id>.json`: trial metadata and data-quality counts.
+```text
+sample_index,timestamp_ms,mic1,mic2,mic3,mic4,vibration,label,trial_id
+```
 
-## Before every recording
+The JSON file records the expected 16 kHz rate, observed Serial row rate,
+duration, valid rows and rejected rows.
 
-Keep the sensor locations, water level, recording duration and leak position
-documented and as consistent as possible. Do not touch the tank during a trial.
-Use a new trial ID every time; the recorder refuses to overwrite an experiment.
+## First pilot
 
-## CSV columns
+Collect alternating baseline and leak trials:
 
-| Column | Meaning |
-|---|---|
-| `timestamp_ms` | Time elapsed since the start of the trial |
-| `mic1` | First microphone raw reading |
-| `mic2` | Second microphone raw reading |
-| `vibration` | Piezo raw reading |
-| `label` | `normal`, `leak` or `noise` |
-| `trial_id` | Unique experiment identifier |
+- `P-N01`: normal
+- `P-H01`: strong leak
+- `P-N02`: normal
+- `P-H02`: strong leak repeated
+- `P-N03`: normal
+- `P-M01`: moderate leak
 
-Ten experiments are a pilot dataset for validating the pipeline. More varied
-experiments will be needed before claiming reliable machine-learning accuracy.
+Keep microphone positions, Piezo position and starting water level fixed. Review
+the six pilot recordings before collecting the official dataset.
+
+## Throughput warning
+
+Four raw 16 kHz microphone channels are usually too large for line-by-line text
+CSV over a slow Serial connection. The logger reports the observed row rate.
+Do not claim full-rate audio unless the JSON metadata confirms the acquisition
+and transfer method preserved the intended rate. Binary transfer, local audio
+storage or on-device feature extraction may be required.
